@@ -1,0 +1,10 @@
+{
+  "name": "vn-topster",
+  "version": "1.0.0",
+  "description": "Topsters-style chart maker for visual novels, powered by the VNDB API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VN Topster — visual novel charts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+JP:wght@400;700&family=Noto+Serif+JP:wght@400;700&family=Playfair+Display:wght@400;700&family=Space+Mono:wght@400;700&family=M+PLUS+Rounded+1c:wght@400;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo">◆</span> VN<b>Topster</b></div>
+    <div class="chart-picker">
+      <select id="chartSelect" title="Saved charts"></select>
+      <button id="newChart" title="New chart">＋ New</button>
+      <button id="dupChart" title="Duplicate chart">⧉</button>
+      <button id="deleteChart" title="Delete chart">🗑</button>
+    </div>
+    <div class="actions">
+      <select id="exportScale" title="Export resolution">
+        <option value="1">1×</option>
+        <option value="2" selected>2×</option>
+      </select>
+      <button id="exportBtn" class="primary">⬇ Export PNG</button>
+    </div>
+  </header>
+
+  <main>
+    <aside class="sidebar">
+      <nav class="tabs">
+        <button data-tab="search" class="active">Search</button>
+        <button data-tab="chart">Chart</button>
+        <button data-tab="style">Style</button>
+        <button data-tab="import">Import</button>
+      </nav>
+
+      <!-- SEARCH -->
+      <section class="tab-panel active" id="tab-search">
+        <div class="search-row">
+          <input id="searchInput" type="search" placeholder="Search VNDB… (title or v17)" autocomplete="off" />
+        </div>
+        <div class="search-row small">
+          <label>Sort
+            <select id="searchSort">
+              <option value="relevance">Relevance</option>
+              <option value="votecount">Popularity</option>
+              <option value="rating">Rating</option>
+              <option value="released">Newest</option>
+            </select>
+          </label>
+          <span id="searchStatus" class="muted"></span>
+        </div>
+        <div id="results" class="results"></div>
+        <button id="loadMore" class="ghost hidden">Load more</button>
+        <p class="muted tiny">Click a cover to add it to the next empty slot, or drag it onto the chart.</p>
+      </section>
+
+      <!-- CHART -->
+      <section class="tab-panel" id="tab-chart">
+        <label class="field">Chart title
+          <input type="text" data-key="title" placeholder="My favourite visual novels" />
+        </label>
+        <label class="field">Layout
+          <select data-key="layout">
+            <option value="collage">Collage (custom grid)</option>
+            <option value="top40">Top 40</option>
+            <option value="top42">Top 42</option>
+            <option value="top100">Top 100</option>
+          </select>
+        </label>
+        <div class="grid2" id="collageDims">
+          <label class="field">Rows <input type="number" min="1" max="10" data-key="rows" /></label>
+          <label class="field">Columns <input type="number" min="1" max="10" data-key="cols" /></label>
+        </div>
+        <label class="field">Cover shape
+          <select data-key="aspect">
+            <option value="1.5">Portrait 2:3 (box art)</option>
+            <option value="1.333">Portrait 3:4</option>
+            <option value="1">Square</option>
+            <option value="0.5625">Landscape 16:9</option>
+          </select>
+        </label>
+        <label class="field">Cover size <span class="val" data-val="coverSize"></span>
+          <input type="range" min="100" max="320" step="10" data-key="coverSize" />
+        </label>
+        <label class="field">Titles
+          <select data-key="titles">
+            <option value="side">List beside chart</option>
+            <option value="below">Below each cover</option>
+            <option value="none">Hidden</option>
+          </select>
+        </label>
+        <div class="checks">
+          <label><input type="checkbox" data-key="showNumbers" /> Rank numbers on covers</label>
+          <label><input type="checkbox" data-key="numberTitles" /> Rank numbers in titles</label>
+          <label><input type="checkbox" data-key="showYear" /> Release year</label>
+          <label><input type="checkbox" data-key="showDev" /> Developer</label>
+          <label><input type="checkbox" data-key="origTitle" /> Original (Japanese) titles</label>
+        </div>
+        <label class="field">Explicit covers
+          <select data-key="nsfw">
+            <option value="show">Show everything</option>
+            <option value="explicit">Blur explicit</option>
+            <option value="suggestive">Blur suggestive &amp; explicit</option>
+          </select>
+        </label>
+        <button id="clearChart" class="danger">Clear all covers</button>
+      </section>
+
+      <!-- STYLE -->
+      <section class="tab-panel" id="tab-style">
+        <div class="presets" id="presets"></div>
+        <div class="grid2">
+          <label class="field">Background <input type="color" data-key="bg" /></label>
+          <label class="field">Text <input type="color" data-key="text" /></label>
+          <label class="field">Accent <input type="color" data-key="accent" /></label>
+          <label class="field">Empty slot <input type="color" data-key="empty" /></label>
+        </div>
+        <label class="field">Background image
+          <div class="row">
+            <input type="file" id="bgImageInput" accept="image/*" />
+            <button id="bgImageClear" class="ghost">Remove</button>
+          </div>
+        </label>
+        <label class="field">Background image dim <span class="val" data-val="bgDim"></span>
+          <input type="range" min="0" max="90" step="5" data-key="bgDim" />
+        </label>
+        <label class="field">Font
+          <select data-key="font">
+            <option value="Inter">Inter</option>
+            <option value="Noto Sans JP">Noto Sans JP</option>
+            <option value="Noto Serif JP">Noto Serif JP</option>
+            <option value="M PLUS Rounded 1c">M PLUS Rounded</option>
+            <option value="Playfair Display">Playfair Display</option>
+            <option value="Space Mono">Space Mono</option>
+          </select>
+        </label>
+        <label class="field">Gap <span class="val" data-val="gap"></span>
+          <input type="range" min="0" max="40" step="1" data-key="gap" />
+        </label>
+        <label class="field">Padding <span class="val" data-val="padding"></span>
+          <input type="range" min="0" max="120" step="2" data-key="padding" />
+        </label>
+        <label class="field">Corner radius <span class="val" data-val="radius"></span>
+          <input type="range" min="0" max="30" step="1" data-key="radius" />
+        </label>
+        <div class="checks">
+          <label><input type="checkbox" data-key="shadow" /> Cover shadows</label>
+          <label><input type="checkbox" data-key="showEmpty" /> Show empty slots in export</label>
+        </div>
+      </section>
+
+      <!-- IMPORT -->
+      <section class="tab-panel" id="tab-import">
+        <p class="muted">Fill the chart from a public VNDB user list, sorted by vote.</p>
+        <label class="field">VNDB username or ID
+          <input type="text" id="importUser" placeholder="e.g. yorhel or u2" />
+        </label>
+        <label class="field">List label
+          <select id="importLabel">
+            <option value="7">Voted</option>
+            <option value="2">Finished</option>
+            <option value="1">Playing</option>
+            <option value="3">Stalled</option>
+            <option value="5">Wishlist</option>
+          </select>
+        </label>
+        <label class="field">Mode
+          <select id="importMode">
+            <option value="replace">Replace chart contents</option>
+            <option value="append">Fill empty slots only</option>
+          </select>
+        </label>
+        <button id="importBtn" class="primary">Import list</button>
+        <p id="importStatus" class="muted"></p>
+        <hr />
+        <p class="muted">Backup / restore this chart as JSON.</p>
+        <div class="row">
+          <button id="exportJson" class="ghost">Save .json</button>
+          <label class="ghost button-like">Load .json<input type="file" id="importJson" accept="application/json" hidden /></label>
+        </div>
+      </section>
+
+      <footer class="credit">Data &amp; covers from <a href="https://vndb.org" target="_blank" rel="noopener">vndb.org</a>. Inspired by <a href="https://topsters.org" target="_blank" rel="noopener">Topsters</a>.</footer>
+    </aside>
+
+    <section class="stage" id="stage">
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="chart"></canvas>
+      </div>
+      <p class="hint">Drag covers onto the chart · drag between slots to swap · drag off the chart or right-click to remove · double-click opens VNDB</p>
+    </section>
+  </main>
+
+  <div id="tooltip" class="tooltip hidden"></div>
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
