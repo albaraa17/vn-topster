@@ -1,5 +1,5 @@
 // Vercel Serverless Function to proxy VNDB images with CORS headers
-const ALLOWED_IMG_HOST = 't.vndb.org';
+const ALLOWED_IMG_HOSTS = new Set(['t.vndb.org', 'images.igdb.com']);
 
 module.exports = async (req, res) => {
   const target = req.query.u;
@@ -16,7 +16,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  if (parsed.protocol !== 'https:' || parsed.hostname !== ALLOWED_IMG_HOST) {
+  if (parsed.protocol !== 'https:' || !ALLOWED_IMG_HOSTS.has(parsed.hostname)) {
     res.status(403).send('forbidden host');
     return;
   }

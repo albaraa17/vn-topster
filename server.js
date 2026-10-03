@@ -9,7 +9,7 @@ const path = require('path');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const ALLOWED_IMG_HOST = 't.vndb.org';
+const ALLOWED_IMG_HOSTS = new Set(['t.vndb.org', 'images.igdb.com']);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -39,7 +39,7 @@ async function handleImg(req, res, url) {
   const target = url.searchParams.get('u');
   let parsed;
   try { parsed = new URL(target); } catch { res.writeHead(400); return res.end('bad url'); }
-  if (parsed.protocol !== 'https:' || parsed.hostname !== ALLOWED_IMG_HOST) {
+  if (parsed.protocol !== 'https:' || !ALLOWED_IMG_HOSTS.has(parsed.hostname)) {
     res.writeHead(403); return res.end('forbidden host');
   }
   const headers = {

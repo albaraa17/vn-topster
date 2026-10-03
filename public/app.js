@@ -713,7 +713,7 @@
   canvas.addEventListener('dblclick', (e) => {
     const idx = hitTest(toLayout(e));
     const it = idx != null && state.items[idx];
-    if (it) window.open(`https://vndb.org/${it.id}`, '_blank', 'noopener');
+    if (it && !it.external) window.open(`https://vndb.org/${it.id}`, '_blank', 'noopener');
   });
 
   // ---------------------------------------------------------------- VNDB API
@@ -1045,19 +1045,112 @@
   $('#exportJson').addEventListener('click', () => {
     download(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }), slug(state.title) + '.json');
   });
-  $('#importJson').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    e.target.value = '';
-    if (!file) return;
+  // ---- topsters.org (.topster) import
+  // File format: base64( "120,156,..." ) -> bytes -> zlib -> JSON { <uuid>: { timestamp, data } }
+  async function decodeTopster(text) {
+    const csv = atob(text.trim());
+    const bytes = Uint8Array.from(csv.split(',').map(Number));
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));
+    return JSON.parse(await new Response(stream).text());
+  }
+
+  const normTitle = (t) => (t || '').toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu, '');
+  const imgKey = (u) => (u || '').replace(/^https?:\/\/t\.vndb\.org\/cv(?:\.t)?\//, '');
+
+  // Match a topsters.org entry to a VNDB entry (by cover URL, then exact title).
+  async function resolveTopsterItem(it) {
+    const external = () => ({
+      id: 'x-' + normTitle(it.title).slice(0, 40) + '-' + uid().slice(0, 4),
+      title: it.title, alttitle: null, released: null, rating: null,
+      dev: it.creator || null,
+      image: it.coverURL ? { url: it.coverURL, thumb: it.coverURL, sexual: 0, violence: 0 } : null,
+      external: true,
+    });
     try {
-      const data = JSON.parse(await file.text());
-      if (!data || !Array.isArray(data.items)) throw new Error();
-      const id = uid();
-      store.charts[id] = sanitizeChart({ ...data, created: Date.now() });
-      switchTo(id);
-      toast('Chart loaded.');
-    } catch {
-      toast('That file is not a valid VN Topster chart.');
+      const data = await api('/vn', {
+        filters: ['search', '=', it.title], fields: VN_FIELDS, sort: 'searchrank', results: 8,
+      });
+      const cands = data.results.map(normalizeVN);
+      const byCover = it.coverURL && cands.find((c) => c.image && imgKey(c.image.url) === imgKey(it.coverURL));
+      const want = normTitle(it.title);
+      const byTitle = cands.find((c) => normTitle(c.title) === want || normTitle(c.alttitle) === want);
+      return byCover || byTitle || external();
+    } catch (err) {
+      if (/rate limit/i.test(err.message)) throw err;
+      return external();
+    }
+  }
+
+  async function chartFromTopster(d, onProgress) {
+    const cols = clamp(+(d.size && d.size.x) || 5, 1, 10);
+    const rows = clamp(+(d.size && d.size.y) || 4, 1, 10);
+    const n = cols * rows;
+    const items = Array(MAX_ITEMS).fill(null);
+    const src = (d.items || []).slice(0, n);
+
+    let done = 0, next = 0;
+    const work = async () => {
+      while (next < src.length) {
+        const i = next++;
+        const it = src[i];
+        if (it && it.title) items[i] = await resolveTopsterItem(it);
+        onProgress(++done, src.length);
+      }
+    };
+    await Promise.all([work(), work(), work(), work()]);
+
+    const fontMap = { monospace: 'Space Mono', serif: 'Playfair Display', 'sans-serif': 'Inter' };
+    const hex = (c, def) => (/^#[0-9a-f]{6}$/i.test(c) ? c : def);
+    return sanitizeChart({
+      title: d.title || 'Imported chart',
+      layout: 'collage', rows, cols,
+      showNumbers: !!d.showNumbers,
+      titles: d.showTitles ? 'side' : 'none',
+      gap: clamp(+d.gap || 0, 0, 40),
+      font: fontMap[d.font] || DEFAULTS.font,
+      bg: hex(d.backgroundColor, DEFAULTS.bg),
+      text: hex(d.textColor, DEFAULTS.text),
+      shadow: !!d.shadows,
+      radius: d.roundCorners ? 12 : 0,
+      items,
+      created: Date.now(),
+    });
+  }
+
+  $('#importJson').addEventListener('change', async (e) => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    let loaded = 0, lastId = null;
+    for (const file of files) {
+      try {
+        const text = await file.text();
+        let data = null;
+        try { data = JSON.parse(text); } catch { /* maybe a .topster file */ }
+        if (data && Array.isArray(data.items)) {
+          // Native VN Topster JSON
+          lastId = uid();
+          store.charts[lastId] = sanitizeChart({ ...data, created: Date.now() });
+          loaded++;
+          continue;
+        }
+        if (!data) data = await decodeTopster(text);
+        const entries = Object.values(data).filter((v) => v && v.data && Array.isArray(v.data.items));
+        if (!entries.length) throw new Error('no charts');
+        for (const entry of entries) {
+          toast(`Importing “${entry.data.title || file.name}”…`, 60000);
+          const chart = await chartFromTopster(entry.data, (d, t) => toast(`Importing “${entry.data.title || file.name}”: matching ${d}/${t} on VNDB…`, 60000));
+          lastId = uid();
+          store.charts[lastId] = chart;
+          loaded++;
+        }
+      } catch (err) {
+        console.error(err);
+        toast(`“${file.name}” is not a valid chart file${err.message && !/no charts/.test(err.message) ? ` (${err.message})` : ''}.`, 4500);
+      }
+    }
+    if (lastId) {
+      switchTo(lastId);
+      toast(`Imported ${loaded} chart${loaded === 1 ? '' : 's'}.`);
     }
   });
 
